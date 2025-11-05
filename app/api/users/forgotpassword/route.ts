@@ -3,12 +3,17 @@ import User from "@/models/userModel";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/helpers/mailer";
 
-connect()
-
 export async function POST(request: NextRequest){
     try {
+        // Ensure database connection
+        await connect();
+        
         const reqBody = await request.json()
         const {email} = reqBody
+
+        if (!email) {
+            return NextResponse.json({error: "Email is required"}, {status: 400})
+        }
 
         // Check if user exists
         const user = await User.findOne({email})
@@ -25,7 +30,10 @@ export async function POST(request: NextRequest){
         })
 
     } catch (error: any) {
-        return NextResponse.json({error: error.message}, {status: 500})
+        console.error("Forgot password error:", error);
+        return NextResponse.json({
+            error: error.message || "Failed to send password reset email"
+        }, {status: 500})
     }
 }
 
