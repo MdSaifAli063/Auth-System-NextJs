@@ -6,6 +6,11 @@ import crypto from 'crypto';
 
 export const sendEmail = async({email, emailType, userId}:any) => {
     try {
+        // Validate required environment variables
+        if (!process.env.DOMAIN) {
+            throw new Error("DOMAIN environment variable is not set");
+        }
+
         // create a secure random token
         const token = crypto.randomBytes(32).toString("hex");
         const hashedToken = await bcryptjs.hash(token, 10)
@@ -18,16 +23,6 @@ export const sendEmail = async({email, emailType, userId}:any) => {
                 {forgotPasswordToken: hashedToken, forgotPasswordTokenExpiry: Date.now() + 3600000})
         }
 
-        var transport = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || "sandbox.smtp.mailtrap.io",
-            port: parseInt(process.env.SMTP_PORT || "2525"),
-            auth: {
-              user: process.env.SMTP_USER || "3fd364695517df",
-              pass: process.env.SMTP_PASS || "7383d58fd399cf"
-            }
-          });
-
-
         const resetUrl = emailType === "VERIFY" 
             ? `${process.env.DOMAIN}/verifyemail?token=${token}`
             : `${process.env.DOMAIN}/resetpassword?token=${token}`;
@@ -39,6 +34,50 @@ export const sendEmail = async({email, emailType, userId}:any) => {
         const actionText = emailType === "VERIFY" 
             ? "verify your email" 
             : "reset your password";
+
+        // Development mode: Skip email sending if SMTP not configured
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+        const isDevelopment = process.env.NODE_ENV === "development";
+
+        if (!smtpUser || !smtpPass) {
+            if (isDevelopment) {
+                // In development, log the token instead of sending email
+                console.log("\n" + "=".repeat(80));
+                console.log(`📧 ${emailType === "VERIFY" ? "EMAIL VERIFICATION" : "PASSWORD RESET"} EMAIL (Development Mode)`);
+                console.log("=".repeat(80));
+                console.log(`To: ${email}`);
+                console.log(`Subject: ${subject}`);
+                console.log(`\n🔗 ${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Link:`);
+                console.log(resetUrl);
+                console.log("\n📝 Token (for testing):");
+                console.log(token);
+                console.log("=".repeat(80) + "\n");
+                // Return a mock response
+                return {
+                    messageId: "dev-mode-mock-id",
+                    accepted: [email],
+                    rejected: [],
+                    pending: [],
+                    response: "Development mode: Email not sent"
+                };
+            } else {
+                throw new Error("SMTP credentials are not configured. Please set SMTP_USER and SMTP_PASS environment variables.");
+            }
+        }
+
+        // Production mode: Send actual email
+        const smtpHost = process.env.SMTP_HOST || "sandbox.smtp.mailtrap.io";
+        const smtpPort = parseInt(process.env.SMTP_PORT || "2525");
+
+        var transport = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            auth: {
+              user: smtpUser,
+              pass: smtpPass
+            }
+          });
 
         const mailOptions = {
             from: 'noreply@authsystem.com',
@@ -65,11 +104,17 @@ export const sendEmail = async({email, emailType, userId}:any) => {
             `
         }
 
-        const mailresponse = await transport.sendMail
-        (mailOptions);
+        const mailresponse = await transport.sendMail(mailOptions);
         return mailresponse;
 
     } catch (error:any) {
-        throw new Error(error.message);
+        // Provide more user-friendly error messages
+        if (error.message.includes("Invalid credentials") || error.message.includes("535")) {
+            throw new Error("SMTP authentication failed. Please check your SMTP_USER and SMTP_PASS environment variables.");
+        }
+        if (error.message.includes("ECONNREFUSED") || error.message.includes("ETIMEDOUT")) {
+            throw new Error("Could not connect to SMTP server. Please check your SMTP_HOST and SMTP_PORT settings.");
+        }
+        throw new Error(`Failed to send email: ${error.message}`);
     }
 }
