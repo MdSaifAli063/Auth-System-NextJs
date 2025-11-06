@@ -267,7 +267,7 @@ This project is licensed under the MIT License.
 
 ## 👨‍💻 Author
 
-**Your Name**
+**Md Saif Ali**
 
 - GitHub: [@yourusername](https://github.com/yourusername)
 - Email: your.email@example.com
