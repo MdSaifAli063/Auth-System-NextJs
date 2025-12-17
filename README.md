@@ -96,6 +96,7 @@ A modern, secure, and fully-featured authentication system built with Next.js, f
 - ⏰ Token expiration (1 hour)
 - 🛡️ Protected routes with middleware
 
+
 ## 📁 Project Structure
 
 ```
